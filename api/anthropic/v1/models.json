@@ -1,0 +1,14 @@
+{
+  "anthropic/claude-gateway-e8d32065": {
+    "id": "deepseek-ai/DeepSeek-V4-Pro-0813",
+    "name": "DeepSeek v4 Pro"
+  },
+  "anthropic/claude-gateway-69545863": {
+    "id": "google/gemma-4-26B-A4B-it",
+    "name": "Gemma 4 26B A4B"
+  },
+  "anthropic/claude-gateway-4b353aaf": {
+    "id": "deepseek-ai/DeepSeek-V4-Flash-0731",
+    "name": "DeepSeek v4 Flash"
+  }
+}
