@@ -3,12 +3,13 @@ import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-const DEEPINFRA_MODELS_URL = "https://api.deepinfra.com/v1/openai/models";
+const DEEPINFRA_MODELS_URL = "https://opencode.ai/zen/v1/models";
 
 const ALLOWED_MODELS = new Set([
-  "deepseek-ai/DeepSeek-V4-Flash-0731",
-  "deepseek-ai/DeepSeek-V4-Pro-0813",
-  "google/gemma-4-26B-A4B-it"
+  "mimo-v2.5-free",
+  "x-preview-f-free",
+  "hy3-free",
+  "nemotron-3.5-lightning-free"
 ]);
 
 function hash(input: string): string {
