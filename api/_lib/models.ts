@@ -6,9 +6,9 @@ import {
   type ProviderName,
 } from "./providers.js";
 
-export type ModelInfo = { id: string; name: string; provider?: string };
+type ModelInfo = { id: string; name: string; provider?: string };
 
-export type ResolvedModel = ModelInfo & { provider: ProviderName };
+type ResolvedModel = ModelInfo & { provider: ProviderName };
 
 let cachedModels: Record<string, ModelInfo> | null = null;
 

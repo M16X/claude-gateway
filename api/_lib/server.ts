@@ -82,7 +82,7 @@ export async function sendUpstreamError(
   });
 }
 
-export function setSseHeaders(res: VercelResponse): void {
+function setSseHeaders(res: VercelResponse): void {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");

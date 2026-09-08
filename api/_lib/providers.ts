@@ -1,6 +1,6 @@
 // Upstream providers. Each provider owns its separate API_URL and API_KEY.
 
-export interface ProviderConfig {
+interface ProviderConfig {
   API_URL: string;
   API_KEY: string | undefined;
   KEY_ENV: string;
@@ -11,11 +11,6 @@ export const PROVIDERS = {
     API_URL: "https://api.deepinfra.com/anthropic/v1/messages",
     API_KEY: process.env.DEEPINFRA_API_KEY,
     KEY_ENV: "DEEPINFRA_API_KEY",
-  },
-  zen: {
-    API_URL: "https://opencode.ai/zen/v1/chat/completions",
-    API_KEY: process.env.ZEN_API_KEY,
-    KEY_ENV: "ZEN_API_KEY",
   },
   vercel: {
     API_URL: "https://ai-gateway.vercel.sh/v1/messages",
