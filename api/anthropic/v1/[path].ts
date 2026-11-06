@@ -1,19 +1,17 @@
+import { createHash } from "node:crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 const GATEWAY_TOKEN = process.env.GATEWAY_TOKEN;
 const API_URL = "https://api.deepinfra.com/anthropic/v1/messages";
 const API_KEY = process.env.UPSTREAM_API_KEY;
 
-interface ModelInfo {
-  id: string;
-  name: string;
-}
+type ModelInfo = { id: string; name: string };
 
-interface AnthropicRequestBody {
+type AnthropicRequestBody = {
   model: string;
   // Any other Anthropic params (messages, tools, metadata, ...) pass through untouched.
   [key: string]: unknown;
-}
+};
 
 function getModelMap(): Record<string, ModelInfo> {
   try {
@@ -23,10 +21,16 @@ function getModelMap(): Record<string, ModelInfo> {
   }
 }
 
-function getModelInfo(model: string): ModelInfo {
-  const found = getModelMap()[model];
-  if (!found) return { id: model, name: model };
-  return { id: found.id, name: found.name };
+function gatewayModelId(modelId: string): string {
+  const hash = createHash("sha1").update(modelId).digest("hex").slice(0, 8);
+  return `anthropic/claude-gateway-${hash}`;
+}
+
+function toUpstreamModelId(gatewayId: string): string {
+  for (const info of Object.values(getModelMap())) {
+    if (gatewayModelId(info.id) === gatewayId) return info.id;
+  }
+  return gatewayId;
 }
 
 function isAuthorized(req: VercelRequest): boolean {
@@ -48,47 +52,23 @@ function isMessagesRoute(req: VercelRequest): boolean {
   return req.method === "POST" && getPathString(req).includes("messages");
 }
 
-function sendAuthenticationError(res: VercelResponse): void {
-  res.status(401).json({
-    type: "error",
-    error: { type: "authentication_error", message: "Invalid bearer token" },
-  });
-}
-
-function sendBadRequest(res: VercelResponse, message: string): void {
-  res.status(400).json({
-    type: "error",
-    error: { type: "invalid_request_error", message },
-  });
-}
-
-function sendNotFound(res: VercelResponse): void {
-  res.status(404).json({ error: "Not found" });
-}
-
 async function sendUpstreamError(
   res: VercelResponse,
   upstream: Response,
 ): Promise<void> {
   const message = await upstream.text();
-  console.log(message);
   res.status(upstream.status).json({
     type: "error",
     error: { type: "upstream_error", message },
   });
 }
 
-function setSseHeaders(res: VercelResponse): void {
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-}
-
 async function pipeStream(
   upstreamBody: ReadableStream<Uint8Array>,
   res: VercelResponse,
 ): Promise<void> {
-  setSseHeaders(res);
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
   const reader = upstreamBody.getReader();
   const decoder = new TextDecoder();
 
@@ -99,7 +79,6 @@ async function pipeStream(
       res.write(decoder.decode(value, { stream: true }));
     }
   } finally {
-    reader.releaseLock();
     res.end();
   }
 }
@@ -110,8 +89,6 @@ async function forwardRequest(
 ): Promise<void> {
   if (!API_KEY) throw new Error("UPSTREAM_API_KEY is not configured");
 
-  const model = getModelInfo(body.model);
-
   // The upstream always streams; the Anthropic wire is passed through as-is.
   const upstream = await fetch(API_URL, {
     method: "POST",
@@ -121,7 +98,7 @@ async function forwardRequest(
     },
     body: JSON.stringify({
       ...body,
-      model: model.id,
+      model: toUpstreamModelId(body.model),
       stream: true,
       fail_fast: true,
       service_tier: "default",
@@ -136,41 +113,41 @@ async function forwardRequest(
   await pipeStream(upstream.body, res);
 }
 
-function listModels(res: VercelResponse): void {
-  const models = getModelMap();
-
-  res.status(200).json({
-    data: Object.entries(models).map(([id, info]) => ({
-      id,
-      type: "model",
-      display_name: info.name,
-    })),
-  });
-}
-
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     if (!isAuthorized(req)) {
-      sendAuthenticationError(res);
+      res.status(401).json({
+        type: "error",
+        error: { type: "authentication_error", message: "Invalid bearer token" },
+      });
       return;
     }
 
     if (isModelsRoute(req)) {
-      listModels(res);
+      res.json({
+        data: Object.values(getModelMap()).map((info) => ({
+          id: gatewayModelId(info.id),
+          type: "model",
+          display_name: info.name,
+        })),
+      });
       return;
     }
 
     if (isMessagesRoute(req)) {
       const body = req.body as AnthropicRequestBody | undefined;
       if (!body?.model) {
-        sendBadRequest(res, "Missing model");
+        res.status(400).json({
+          type: "error",
+          error: { type: "invalid_request_error", message: "Missing model" },
+        });
         return;
       }
       await forwardRequest(res, body);
       return;
     }
 
-    sendNotFound(res);
+    res.status(404).json({ error: "Not found" });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Internal server error" });
