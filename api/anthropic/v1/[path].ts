@@ -18,7 +18,7 @@ type ModelInfo = {
   id: string;
   /** Human-readable name exposed by the models endpoint. */
   name: string;
-  
+
   gatewayId?: string;
 };
 
@@ -120,7 +120,7 @@ async function streamResponse(
   const decoder = new TextDecoder();
 
   try {
-    for (;;) {
+    for (; ;) {
       const { done, value } = await reader.read();
       if (done) break;
       res.write(decoder.decode(value, { stream: true }));
@@ -135,6 +135,7 @@ async function streamResponse(
 // ---------------------------------------------------------------------------
 
 async function forwardToUpstream(
+  req: VercelRequest,
   res: VercelResponse,
   body: AnthropicRequestBody,
 ): Promise<void> {
@@ -142,11 +143,16 @@ async function forwardToUpstream(
     throw new Error("UPSTREAM_API_KEY is not configured");
   }
 
+  console.log()
+
   const upstream = await fetch(UPSTREAM_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${UPSTREAM_API_KEY}`,
       "Content-Type": "application/json",
+      ...(req.headers["anthropic-beta"]
+        ? { "anthropic-beta": req.headers["anthropic-beta"] as string }
+        : {}),
     },
     body: JSON.stringify({
       ...body,
@@ -192,7 +198,7 @@ async function handleMessages(
     return;
   }
 
-  await forwardToUpstream(res, body);
+  await forwardToUpstream(req, res, body);
 }
 
 export default async function handler(
