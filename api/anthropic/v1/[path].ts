@@ -118,12 +118,42 @@ async function streamResponse(
 
   const reader = upstreamBody.getReader();
   const decoder = new TextDecoder();
+  let buffer = "";
 
   try {
     for (; ;) {
       const { done, value } = await reader.read();
       if (done) break;
-      res.write(decoder.decode(value, { stream: true }));
+
+      const chunk = decoder.decode(value, { stream: true });
+      res.write(chunk);
+
+      // Buffer incoming text to parse line-delimited SSE frames
+      buffer += chunk;
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? ""; // Retain incomplete line in buffer
+
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const dataStr = line.slice(6).trim();
+        if (dataStr === "[DONE]") continue;
+
+        try {
+          const parsed = JSON.parse(dataStr);
+
+          // Initial input and cache metrics
+          if (parsed.type === "message_start" && parsed.message?.usage) {
+            console.log("[Token Usage - message_start]:", JSON.stringify(parsed.message.usage, null, 2));
+          }
+
+          // Final output and cumulative metrics
+          if (parsed.type === "message_delta" && parsed.usage) {
+            console.log("[Token Usage - message_delta]:", JSON.stringify(parsed.usage, null, 2));
+          }
+        } catch {
+          // Skip non-JSON or partial frames
+        }
+      }
     }
   } finally {
     res.end();
@@ -143,16 +173,14 @@ async function forwardToUpstream(
     throw new Error("UPSTREAM_API_KEY is not configured");
   }
 
-  console.log(req.headers);
+  console.log(getAnthropicHeaders(req));
 
   const upstream = await fetch(UPSTREAM_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${UPSTREAM_API_KEY}`,
       "Content-Type": "application/json",
-      ...(req.headers["anthropic-beta"]
-        ? { "anthropic-beta": req.headers["anthropic-beta"] as string }
-        : {}),
+      ...getAnthropicHeaders(req)
     },
     body: JSON.stringify({
       ...body,
@@ -160,7 +188,7 @@ async function forwardToUpstream(
       // The upstream always streams, so the client always receives SSE.
       stream: true,
       fail_fast: true,
-      service_tier: "default",
+      service_tier: "flex",
     }),
   });
 
@@ -171,6 +199,19 @@ async function forwardToUpstream(
   }
 
   await streamResponse(upstream.body, res);
+}
+
+
+function getAnthropicHeaders(req: VercelRequest): Record<string, string> {
+  const forwarded: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(req.headers)) {
+    if (key.toLowerCase().startsWith("anthropic-") && value !== undefined) {
+      forwarded[key] = Array.isArray(value) ? value.join(", ") : value;
+    }
+  }
+
+  return forwarded;
 }
 
 // ---------------------------------------------------------------------------
