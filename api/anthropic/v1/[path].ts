@@ -18,6 +18,8 @@ type ModelInfo = {
   id: string;
   /** Human-readable name exposed by the models endpoint. */
   name: string;
+  
+  gatewayId?: string;
 };
 
 type AnthropicRequestBody = {
@@ -47,9 +49,13 @@ function readModels(): Record<string, ModelInfo> {
  * Claude clients only accept model ids with the gateway prefix, so derive a
  * stable public id from the upstream model id.
  */
-function toGatewayModelId(upstreamModelId: string): string {
+function toGatewayModelId(model: ModelInfo): string {
+  if (model.gatewayId) {
+    return model.gatewayId;
+  }
+
   const digest = createHash("sha1")
-    .update(upstreamModelId)
+    .update(model.id)
     .digest("hex")
     .slice(0, 8);
 
@@ -58,7 +64,7 @@ function toGatewayModelId(upstreamModelId: string): string {
 
 function toUpstreamModelId(gatewayId: string): string {
   const match = Object.values(readModels()).find(
-    (model) => toGatewayModelId(model.id) === gatewayId,
+    (model) => toGatewayModelId(model) === gatewayId,
   );
 
   return match?.id ?? gatewayId;
@@ -167,7 +173,7 @@ async function forwardToUpstream(
 
 function handleModels(res: VercelResponse): void {
   const data = Object.values(readModels()).map((model) => ({
-    id: toGatewayModelId(model.id),
+    id: toGatewayModelId(model),
     type: "model",
     display_name: model.name,
   }));
