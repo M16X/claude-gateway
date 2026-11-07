@@ -143,7 +143,7 @@ async function forwardToUpstream(
     throw new Error("UPSTREAM_API_KEY is not configured");
   }
 
-  console.log()
+  console.log(req.headers);
 
   const upstream = await fetch(UPSTREAM_URL, {
     method: "POST",
