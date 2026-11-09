@@ -187,9 +187,7 @@ async function forwardToUpstream(
       ...body,
       model: toUpstreamModelId(body.model),
       // The upstream always streams, so the client always receives SSE.
-      stream: true,
-      fail_fast: true,
-      service_tier: "flex",
+      stream: true
     }),
   });
 
